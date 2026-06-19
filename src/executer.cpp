@@ -14,17 +14,31 @@ void Executer::execute(const std::vector<std::string>& tokens) {
     return;
   }
 
+  bool background = false;
+
+  //check for background execution
+  if (!tokens.empty() && tokens.back() == "&") background = true;
+
   //check for output redirection
   int redirectIndex = -1;
   std::string outputFile;
 
   for (size_t i = 0; i < tokens.size(); i++) {
+
+    //check for background execution symbol '&' not at the end of the command
+      if(tokens[i] == "&" && i != tokens.size() - 1) {
+          std::cerr << "background execution symbol '&' must be at the end of the command\n";
+          return;
+      }
+
       if (tokens[i] == ">") {
           redirectIndex = i;
+
           if (redirectIndex == tokens.size() - 1) {
             std::cerr << "missing output file\n";
             return;
           }
+
           outputFile = tokens[redirectIndex + 1];
           break;
       }
@@ -36,6 +50,8 @@ void Executer::execute(const std::vector<std::string>& tokens) {
   unsigned int limit;
   if(redirectIndex != -1) {
     limit = redirectIndex;
+  } else if (background) {
+    limit = tokens.size() - 1;
   } else {
     limit = tokens.size();
   }
@@ -81,6 +97,7 @@ void Executer::execute(const std::vector<std::string>& tokens) {
       std::cerr << tokens[0] << ": " << msg << std::endl;
     }
   } else {  // parent process (pid > 0)
-    waitpid(pid, nullptr, 0);
+    if(!background)
+      waitpid(pid, nullptr, 0);
   }
 }
