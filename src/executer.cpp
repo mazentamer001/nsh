@@ -4,12 +4,18 @@
 #include <unistd.h>
 
 #include <fcntl.h>
+#include <signal.h>
 
 #include <iostream>
 
 #include "builtins.hpp"
 
+int Executer::jobID = 0; //added jobID
+
 void Executer::execute(const std::vector<std::string>& tokens) {
+
+  signal(SIGCHLD, SIG_IGN);  //to prevent zombie processes.
+
   if (Builtins::handle(tokens)) {
     return;
   }
@@ -68,10 +74,15 @@ void Executer::execute(const std::vector<std::string>& tokens) {
     std::cerr << tokens[0] << ": failed to execute command" << std::endl;
   } else if (pid == 0) {  // child process
 
-    std::cout << "DEBUG: before redirection\n";
+    //this basicaly redirects the output of the background processes to another file so that it doesnt override the output from the main shell, messing with the shell prompt (fixes the shell prompt not showing up after running a background process issue)
+    if (background) {
+      int devnull = open("/dev/null", O_WRONLY);
+      dup2(devnull, STDOUT_FILENO);
+      dup2(devnull, STDERR_FILENO);
+      close(devnull);
+    }
 
     if (redirectIndex != -1) {
-      std::cout << "DEBUG: redirect detected\n";
       int fd = open(outputFile.c_str(), O_WRONLY | O_CREAT | O_TRUNC, 0644);  //this will give us a handle to the output file, creating it if it doesn't exist and truncating it if it does
 
       if (fd < 0) {
@@ -82,7 +93,6 @@ void Executer::execute(const std::vector<std::string>& tokens) {
       dup2(fd, STDOUT_FILENO);  //this redirects the standard output to the file by duplicating the file descriptor to STDOUT_FILENO
       close(fd);
 
-      std::cout << "DEBUG: after dup2\n";  //<-- this line will be printed to the output file, not the console
     }
 
     int status = execvp(argv[0], const_cast<char* const*>(argv.data()));
@@ -95,9 +105,12 @@ void Executer::execute(const std::vector<std::string>& tokens) {
       }
 
       std::cerr << tokens[0] << ": " << msg << std::endl;
+      exit(EXIT_FAILURE);  //added exit call to terminate the child process after execvp fails, without this line a 2nd shell essentially gets created. (fixes the exit command not working issue)
     }
   } else {  // parent process (pid > 0)
-    if(!background)
-      waitpid(pid, nullptr, 0);
+      if (background)
+        std::cout << "[" << ++jobID << "] " << pid << std::endl;  //<-- print the job ID and PID of the background process
+      else 
+        waitpid(pid, nullptr, 0);
   }
 }

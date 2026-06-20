@@ -5,7 +5,7 @@
 
 int main() {
   while (true) {
-    std::cout << "nsh> ";
+    std::cout << "nsh> " << std::flush;  //added flush to ensure the prompt is displayed immediately(fixed the issue of typing before the prompt appears)
     std::string input;
     std::getline(std::cin, input);
 
